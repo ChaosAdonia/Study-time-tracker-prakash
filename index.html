@@ -347,6 +347,13 @@
             font-size: 12px;
             opacity: 0.9;
         }
+
+        .wake-lock-status {
+            text-align: center;
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -398,6 +405,7 @@
             </div>
 
             <button class="btn-secondary" onclick="showRecords()" style="width: 100%; margin-top: 15px;">View Records</button>
+            <div class="wake-lock-status" id="wakeLockStatus"></div>
         </div>
 
         <!-- Records Screen -->
@@ -442,27 +450,59 @@
     </div>
 
     <script>
-        // State management
+        // State management - uses actual timestamps instead of counting
         let studyState = {
             isRunning: false,
             onBreak: false,
-            startTime: null,
+            sessionStartTime: null,
+            studyStartTime: null,
             targetMinutes: 0,
-            remainingSeconds: 0,
-            totalStudySeconds: 0,
-            totalBreakSeconds: 0,
-            breakStartTime: null,
-            breakDurationSeconds: 0,
-            breakRemainingSeconds: 0,
+            totalBreakMilliseconds: 0,
+            currentBreakStart: null,
+            breakDurationMinutes: 0,
+            breakEndTime: null,
             breaks: []
         };
 
         let timerInterval = null;
-        let breakInterval = null;
+        let wakeLock = null;
 
         // Initialize
         function init() {
             loadRecords();
+            requestWakeLock();
+            
+            // Re-request wake lock when page becomes visible
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible' && studyState.isRunning) {
+                    requestWakeLock();
+                }
+            });
+        }
+
+        // Request wake lock to keep screen awake
+        async function requestWakeLock() {
+            if ('wakeLock' in navigator) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    updateWakeLockStatus('🔒 Screen will stay on');
+                    
+                    wakeLock.addEventListener('release', () => {
+                        updateWakeLockStatus('');
+                    });
+                } catch (err) {
+                    updateWakeLockStatus('⚠️ Timer works even with screen off');
+                }
+            } else {
+                updateWakeLockStatus('⚠️ Timer works even with screen off');
+            }
+        }
+
+        function updateWakeLockStatus(message) {
+            const statusEl = document.getElementById('wakeLockStatus');
+            if (statusEl) {
+                statusEl.textContent = message;
+            }
         }
 
         // Quick time selection
@@ -479,26 +519,29 @@
                 return;
             }
 
+            const now = Date.now();
             studyState = {
                 isRunning: true,
                 onBreak: false,
-                startTime: new Date(),
+                sessionStartTime: now,
+                studyStartTime: now,
                 targetMinutes: duration,
-                remainingSeconds: duration * 60,
-                totalStudySeconds: 0,
-                totalBreakSeconds: 0,
-                breakStartTime: null,
+                totalBreakMilliseconds: 0,
+                currentBreakStart: null,
+                breakDurationMinutes: 0,
+                breakEndTime: null,
                 breaks: []
             };
 
             document.getElementById('setupScreen').classList.remove('active');
             document.getElementById('timerScreen').classList.add('active');
 
+            requestWakeLock();
             updateSessionInfo();
             startTimer();
         }
 
-        // Timer logic
+        // Timer logic - calculates based on elapsed time
         function startTimer() {
             if (timerInterval) clearInterval(timerInterval);
             
@@ -507,27 +550,36 @@
             document.getElementById('stopBtn').disabled = false;
             
             timerInterval = setInterval(() => {
-                if (studyState.isRunning && !studyState.onBreak) {
-                    studyState.remainingSeconds--;
-                    studyState.totalStudySeconds++;
-
-                    if (studyState.remainingSeconds <= 0) {
-                        completeSession();
-                        return;
-                    }
-                }
-
                 updateDisplay();
-            }, 1000);
+                
+                // Check if study time is complete
+                const now = Date.now();
+                const elapsedStudyTime = now - studyState.studyStartTime - studyState.totalBreakMilliseconds;
+                if (!studyState.onBreak && elapsedStudyTime >= studyState.targetMinutes * 60 * 1000) {
+                    completeSession();
+                }
+            }, 100);
 
             updateDisplay();
         }
 
-        // Update timer display
+        // Update timer display based on actual elapsed time
         function updateDisplay() {
-            const hours = Math.floor(studyState.remainingSeconds / 3600);
-            const minutes = Math.floor((studyState.remainingSeconds % 3600) / 60);
-            const seconds = studyState.remainingSeconds % 60;
+            const now = Date.now();
+            
+            // Calculate total break time including current break
+            let totalBreakTime = studyState.totalBreakMilliseconds;
+            if (studyState.onBreak && studyState.currentBreakStart) {
+                totalBreakTime += (now - studyState.currentBreakStart);
+            }
+            
+            const elapsedStudyTime = now - studyState.studyStartTime - totalBreakTime;
+            const remainingTime = Math.max(0, (studyState.targetMinutes * 60 * 1000) - elapsedStudyTime);
+            
+            const totalSeconds = Math.floor(remainingTime / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
 
             document.getElementById('timerDisplay').textContent = 
                 `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
@@ -550,26 +602,31 @@
 
         // Update session information
         function updateSessionInfo() {
+            const startDate = new Date(studyState.sessionStartTime);
             document.getElementById('startTime').textContent = 
-                studyState.startTime ? studyState.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+                studyState.sessionStartTime ? startDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '--:--';
             
             document.getElementById('targetDuration').textContent = `${studyState.targetMinutes} min`;
             
-            document.getElementById('timeStudied').textContent = 
-                formatDuration(studyState.totalStudySeconds);
-            
-            document.getElementById('breakTime').textContent = 
-                formatDuration(studyState.totalBreakSeconds);
-        }
-
-        // Toggle break - now opens modal to select duration
-        function toggleBreak() {
-            if (studyState.onBreak) {
-                // Already on break, this shouldn't happen as button is hidden
-                return;
+            // Calculate actual study time
+            const now = Date.now();
+            let totalBreakTime = studyState.totalBreakMilliseconds;
+            if (studyState.onBreak && studyState.currentBreakStart) {
+                totalBreakTime += (now - studyState.currentBreakStart);
             }
             
-            // Show break duration selection modal
+            const studyTime = Math.floor((now - studyState.studyStartTime - totalBreakTime) / 1000);
+            document.getElementById('timeStudied').textContent = formatDuration(Math.max(0, studyTime));
+            
+            const breakTime = Math.floor(totalBreakTime / 1000);
+            document.getElementById('breakTime').textContent = formatDuration(breakTime);
+        }
+
+        // Toggle break - opens modal
+        function toggleBreak() {
+            if (studyState.onBreak) {
+                return;
+            }
             document.getElementById('breakModal').classList.add('active');
         }
 
@@ -582,40 +639,44 @@
         function startBreak(minutes) {
             closeBreakModal();
             
+            const now = Date.now();
             studyState.onBreak = true;
-            studyState.breakStartTime = new Date();
-            studyState.breakDurationSeconds = minutes * 60;
-            studyState.breakRemainingSeconds = minutes * 60;
+            studyState.currentBreakStart = now;
+            studyState.breakDurationMinutes = minutes;
+            studyState.breakEndTime = now + (minutes * 60 * 1000);
             
-            // Hide study timer controls, show break timer modal
             document.getElementById('breakTimerModal').classList.add('active');
             
-            // Start break countdown
-            if (breakInterval) clearInterval(breakInterval);
-            breakInterval = setInterval(() => {
-                studyState.breakRemainingSeconds--;
-                studyState.totalBreakSeconds++;
+            updateBreakTimer();
+        }
+
+        // Update break timer display
+        function updateBreakTimer() {
+            const interval = setInterval(() => {
+                if (!studyState.onBreak) {
+                    clearInterval(interval);
+                    return;
+                }
                 
-                const mins = Math.floor(studyState.breakRemainingSeconds / 60);
-                const secs = studyState.breakRemainingSeconds % 60;
+                const now = Date.now();
+                const remaining = Math.max(0, studyState.breakEndTime - now);
+                const totalSeconds = Math.floor(remaining / 1000);
+                
+                const mins = Math.floor(totalSeconds / 60);
+                const secs = totalSeconds % 60;
+                
                 document.getElementById('breakTimerDisplay').textContent = 
                     `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
                 
-                updateDisplay();
-                
-                if (studyState.breakRemainingSeconds <= 0) {
+                if (remaining <= 0) {
+                    clearInterval(interval);
                     breakComplete();
                 }
-            }, 1000);
-            
-            updateDisplay();
+            }, 100);
         }
 
         // Break timer completed
         function breakComplete() {
-            clearInterval(breakInterval);
-            
-            // Vibrate if supported
             if (navigator.vibrate) {
                 navigator.vibrate([200, 100, 200, 100, 200]);
             }
@@ -624,22 +685,23 @@
             endBreakEarly();
         }
 
-        // End break early (resume studying)
+        // End break early
         function endBreakEarly() {
-            clearInterval(breakInterval);
+            const now = Date.now();
+            const breakDuration = now - studyState.currentBreakStart;
             
-            const breakDuration = Math.floor((new Date() - studyState.breakStartTime) / 1000);
             studyState.breaks.push({
-                startTime: studyState.breakStartTime,
-                endTime: new Date(),
+                startTime: studyState.currentBreakStart,
+                endTime: now,
                 duration: breakDuration,
-                plannedDuration: studyState.breakDurationSeconds
+                plannedDuration: studyState.breakDurationMinutes * 60 * 1000
             });
             
+            studyState.totalBreakMilliseconds += breakDuration;
             studyState.onBreak = false;
-            studyState.breakStartTime = null;
-            studyState.breakDurationSeconds = 0;
-            studyState.breakRemainingSeconds = 0;
+            studyState.currentBreakStart = null;
+            studyState.breakDurationMinutes = 0;
+            studyState.breakEndTime = null;
             
             document.getElementById('breakTimerModal').classList.remove('active');
             updateDisplay();
@@ -647,57 +709,76 @@
 
         // Extend break by 5 minutes
         function extendBreak() {
-            studyState.breakRemainingSeconds += 300; // Add 5 minutes
-            studyState.breakDurationSeconds += 300;
+            studyState.breakEndTime += 5 * 60 * 1000;
+            studyState.breakDurationMinutes += 5;
         }
 
         // Stop session
         function stopSession() {
-            // If on break, close the break first
             if (studyState.onBreak) {
-                clearInterval(breakInterval);
-                const breakDuration = Math.floor((new Date() - studyState.breakStartTime) / 1000);
+                const now = Date.now();
+                const breakDuration = now - studyState.currentBreakStart;
                 studyState.breaks.push({
-                    startTime: studyState.breakStartTime,
-                    endTime: new Date(),
+                    startTime: studyState.currentBreakStart,
+                    endTime: now,
                     duration: breakDuration,
-                    plannedDuration: studyState.breakDurationSeconds
+                    plannedDuration: studyState.breakDurationMinutes * 60 * 1000
                 });
-                studyState.onBreak = false;
+                studyState.totalBreakMilliseconds += breakDuration;
                 document.getElementById('breakTimerModal').classList.remove('active');
             }
 
             studyState.isRunning = false;
             clearInterval(timerInterval);
+            
+            if (wakeLock) {
+                wakeLock.release();
+                wakeLock = null;
+            }
+            
             saveSession();
             
-            // Show confirmation message
-            alert('✅ Session saved! You studied for ' + formatDuration(studyState.totalStudySeconds));
+            const now = Date.now();
+            const studySeconds = Math.floor((now - studyState.studyStartTime - studyState.totalBreakMilliseconds) / 1000);
+            alert('✅ Session saved! You studied for ' + formatDuration(studySeconds));
             
             resetToSetup();
         }
 
-        // Complete session (when timer reaches 0)
+        // Complete session
         function completeSession() {
             clearInterval(timerInterval);
             studyState.isRunning = false;
+            
+            if (wakeLock) {
+                wakeLock.release();
+                wakeLock = null;
+            }
             
             alert('🎉 Congratulations! You completed your study session!');
             saveSession();
             resetToSetup();
         }
 
-        // Save session to localStorage
+        // Save session
         function saveSession() {
+            const now = Date.now();
+            const totalStudyTime = now - studyState.studyStartTime - studyState.totalBreakMilliseconds;
+            
             const session = {
-                date: new Date().toISOString(),
-                startTime: studyState.startTime.toISOString(),
-                endTime: new Date().toISOString(),
+                date: new Date(studyState.sessionStartTime).toISOString(),
+                startTime: new Date(studyState.sessionStartTime).toISOString(),
+                endTime: new Date(now).toISOString(),
                 targetMinutes: studyState.targetMinutes,
-                studySeconds: studyState.totalStudySeconds,
-                breakSeconds: studyState.totalBreakSeconds,
-                breaks: studyState.breaks,
-                completed: studyState.remainingSeconds <= 0
+                studySeconds: Math.floor(totalStudyTime / 1000),
+                breakSeconds: Math.floor(studyState.totalBreakMilliseconds / 1000),
+                breaks: studyState.breaks.map(b => ({
+                    startTime: new Date(b.startTime).toISOString(),
+                    endTime: new Date(b.endTime).toISOString(),
+                    duration: Math.floor(b.duration / 1000),
+                    plannedDuration: Math.floor(b.plannedDuration / 1000)
+                })),
+                completed: totalStudyTime >= (studyState.targetMinutes * 60 * 1000)
             };
 
             let records = JSON.parse(localStorage.getItem('studyRecords') || '[]');
@@ -705,10 +786,9 @@
             localStorage.setItem('studyRecords', JSON.stringify(records));
         }
 
-        // Reset to setup screen
+        // Reset to setup
         function resetToSetup() {
             clearInterval(timerInterval);
-            clearInterval(breakInterval);
             document.getElementById('timerScreen').classList.remove('active');
             document.getElementById('breakTimerModal').classList.remove('active');
             document.getElementById('breakModal').classList.remove('active');
@@ -811,7 +891,7 @@
             }
         }
 
-        // Format duration in seconds to readable format
+        // Format duration
         function formatDuration(seconds) {
             const hours = Math.floor(seconds / 3600);
             const minutes = Math.floor((seconds % 3600) / 60);
