@@ -354,6 +354,96 @@
             color: #6b7280;
             margin-top: 10px;
         }
+
+        .weekly-summary {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .weekly-summary h3 {
+            margin-bottom: 15px;
+            font-size: 20px;
+            text-align: center;
+        }
+
+        .weekly-progress {
+            margin-bottom: 20px;
+        }
+
+        .progress-bar-container {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            height: 30px;
+            overflow: hidden;
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        .progress-bar {
+            background: white;
+            height: 100%;
+            border-radius: 20px;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #10b981;
+            font-size: 14px;
+        }
+
+        .progress-bar.overtime {
+            background: linear-gradient(90deg, #fbbf24, #f59e0b);
+            color: white;
+        }
+
+        .weekly-target-info {
+            text-align: center;
+            font-size: 18px;
+            margin-top: 10px;
+        }
+
+        .target-remaining {
+            font-size: 32px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .target-remaining.completed {
+            color: #fbbf24;
+        }
+
+        .target-remaining.in-progress {
+            color: white;
+        }
+
+        .weekly-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .weekly-stat {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .weekly-stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .weekly-stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+        }
     </style>
 </head>
 <body>
@@ -991,6 +1081,62 @@
                 return;
             }
 
+            // Get weekly stats
+            const weeklyStats = getWeeklyStats();
+            
+            let html = '';
+            
+            // Weekly Summary Card
+            const progressPercent = Math.min(100, weeklyStats.percentComplete);
+            const progressWidth = weeklyStats.isOvertime ? 100 : progressPercent;
+            
+            html += `
+                <div class="weekly-summary">
+                    <h3>📊 This Week (${formatWeekRange()})</h3>
+                    
+                    <div class="weekly-progress">
+                        <div class="progress-bar-container">
+                            <div class="progress-bar ${weeklyStats.isOvertime ? 'overtime' : ''}" style="width: ${progressWidth}%;">
+                                ${Math.round(progressPercent)}%
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="weekly-target-info">
+                        <div>Weekly Target: 15 hours</div>
+                        <div class="target-remaining ${weeklyStats.isOvertime ? 'completed' : 'in-progress'}">
+                            ${weeklyStats.isOvertime 
+                                ? '+' + formatDuration(Math.abs(weeklyStats.remainingSeconds)) + ' 🎉'
+                                : formatDuration(Math.max(0, weeklyStats.remainingSeconds)) + ' remaining'
+                            }
+                        </div>
+                        ${weeklyStats.isOvertime 
+                            ? '<div style="font-size: 14px; margin-top: 5px;">🌟 Target exceeded! Great job!</div>'
+                            : ''
+                        }
+                    </div>
+                    
+                    <div class="weekly-stats-grid">
+                        <div class="weekly-stat">
+                            <div class="weekly-stat-value">${weeklyStats.totalSessions}</div>
+                            <div class="weekly-stat-label">Sessions</div>
+                        </div>
+                        <div class="weekly-stat">
+                            <div class="weekly-stat-value">${weeklyStats.completedSessions}</div>
+                            <div class="weekly-stat-label">Completed</div>
+                        </div>
+                        <div class="weekly-stat">
+                            <div class="weekly-stat-value">${formatDuration(weeklyStats.totalStudySeconds)}</div>
+                            <div class="weekly-stat-label">Total Study</div>
+                        </div>
+                        <div class="weekly-stat">
+                            <div class="weekly-stat-value">${formatDuration(weeklyStats.totalBreakSeconds)}</div>
+                            <div class="weekly-stat-label">Total Breaks</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
             // Group by date
             const groupedByDate = records.reduce((acc, record) => {
                 const date = new Date(record.date).toLocaleDateString('en-US', { 
@@ -1004,7 +1150,6 @@
                 return acc;
             }, {});
 
-            let html = '';
             for (const [date, sessions] of Object.entries(groupedByDate)) {
                 const totalStudySeconds = sessions.reduce((sum, s) => sum + s.studySeconds, 0);
                 const totalBreakSeconds = sessions.reduce((sum, s) => sum + s.breakSeconds, 0);
@@ -1073,6 +1218,77 @@
                 return `${hours}h ${minutes}m`;
             }
             return `${minutes}m`;
+        }
+
+        // Get current week start and end (Monday 00:00 to Sunday 23:59:59 Darwin time)
+        function getCurrentWeekBounds() {
+            // Darwin is UTC+9:30 (ACST) - no DST in Northern Territory
+            const darwinOffset = 9.5 * 60; // minutes
+            
+            // Get current time in Darwin
+            const now = new Date();
+            const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+            const darwinTime = new Date(utcTime + (darwinOffset * 60000));
+            
+            // Get day of week (0 = Sunday, 1 = Monday, etc.)
+            const dayOfWeek = darwinTime.getDay();
+            
+            // Calculate days since Monday (Monday = 0, Tuesday = 1, etc.)
+            const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+            
+            // Get Monday at 00:00:00 Darwin time
+            const weekStart = new Date(darwinTime);
+            weekStart.setDate(darwinTime.getDate() - daysSinceMonday);
+            weekStart.setHours(0, 0, 0, 0);
+            
+            // Get Sunday at 23:59:59 Darwin time
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            weekEnd.setHours(23, 59, 59, 999);
+            
+            return { weekStart, weekEnd };
+        }
+
+        // Check if a date is in current week
+        function isInCurrentWeek(dateString) {
+            const { weekStart, weekEnd } = getCurrentWeekBounds();
+            const date = new Date(dateString);
+            return date >= weekStart && date <= weekEnd;
+        }
+
+        // Format week range for display
+        function formatWeekRange() {
+            const { weekStart, weekEnd } = getCurrentWeekBounds();
+            const startStr = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const endStr = weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            return `${startStr} - ${endStr}`;
+        }
+
+        // Get weekly statistics
+        function getWeeklyStats() {
+            const records = JSON.parse(localStorage.getItem('studyRecords') || '[]');
+            
+            const weeklyRecords = records.filter(record => isInCurrentWeek(record.date));
+            
+            const totalStudySeconds = weeklyRecords.reduce((sum, r) => sum + r.studySeconds, 0);
+            const totalBreakSeconds = weeklyRecords.reduce((sum, r) => sum + r.breakSeconds, 0);
+            const totalSessions = weeklyRecords.length;
+            const completedSessions = weeklyRecords.filter(r => r.completed).length;
+            
+            // 15 hours target = 54000 seconds
+            const targetSeconds = 15 * 3600;
+            const remainingSeconds = targetSeconds - totalStudySeconds;
+            
+            return {
+                totalStudySeconds,
+                totalBreakSeconds,
+                totalSessions,
+                completedSessions,
+                targetSeconds,
+                remainingSeconds,
+                percentComplete: Math.min(100, (totalStudySeconds / targetSeconds) * 100),
+                isOvertime: totalStudySeconds > targetSeconds
+            };
         }
 
         // Initialize app
