@@ -474,6 +474,9 @@
             </div>
             <button class="btn-primary" onclick="startStudySession()" style="width: 100%;">Start Study Session</button>
             
+            <!-- Test Notification Button -->
+            <button class="btn-secondary" onclick="testNotification()" style="width: 100%; margin-top: 10px; font-size: 14px;">🔔 Test Sound & Notification</button>
+            
             <!-- Weekly Progress Widget -->
             <div id="weeklyProgressWidget" style="margin-top: 30px;"></div>
             
@@ -740,6 +743,55 @@
             } catch (err) {
                 console.log('Could not show notification:', err);
             }
+        }
+
+        // Test notification and sound
+        async function testNotification() {
+            console.log('Testing notification system...');
+            
+            // Request notification permission if needed
+            if ('Notification' in window) {
+                if (Notification.permission === 'default') {
+                    const permission = await Notification.requestPermission();
+                    if (permission !== 'granted') {
+                        alert('❌ Notification permission denied. You will still hear sounds and feel vibrations, but no lock screen notifications will appear.');
+                        return;
+                    }
+                }
+                
+                if (Notification.permission === 'denied') {
+                    alert('❌ Notifications are blocked. To enable:\n\niPhone: Settings > Safari > Allow Notifications\nAndroid: Settings > Apps > Chrome > Notifications > Allow\n\nYou will still hear sounds and feel vibrations.');
+                    return;
+                }
+            }
+            
+            // Play sound
+            console.log('Playing test sound...');
+            playStudyCompleteSound();
+            
+            // Vibrate
+            if (navigator.vibrate) {
+                console.log('Vibrating...');
+                navigator.vibrate([300, 100, 300, 100, 300]);
+            }
+            
+            // Show notification
+            if ('Notification' in window && Notification.permission === 'granted') {
+                console.log('Showing notification...');
+                new Notification('🎉 Test Successful!', {
+                    body: 'You will receive this notification when your study session ends.',
+                    icon: '📚',
+                    vibrate: [200, 100, 200]
+                });
+            }
+            
+            // Show success message
+            setTimeout(() => {
+                alert('✅ Test Complete!\n\n' +
+                      'Did you hear 3 beeps? ' + (navigator.vibrate ? '📳 Feel vibration? ' : '') +
+                      (Notification.permission === 'granted' ? '🔔 See notification?' : '') +
+                      '\n\nIf yes, your alarms are working! You\'ll get these when your timer ends.');
+            }, 1000);
         }
 
         function updateWakeLockStatus(message) {
