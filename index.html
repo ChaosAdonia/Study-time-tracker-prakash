@@ -663,27 +663,37 @@
             try {
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
                 
-                // Play 3 ascending beeps
-                [440, 554, 659].forEach((freq, i) => {
+                // Play longer sequence of ascending beeps (6 beeps instead of 3)
+                const melody = [
+                    { freq: 523, time: 0 },    // C5
+                    { freq: 659, time: 0.4 },  // E5
+                    { freq: 784, time: 0.8 },  // G5
+                    { freq: 523, time: 1.2 },  // C5
+                    { freq: 659, time: 1.6 },  // E5
+                    { freq: 1047, time: 2.0 }  // C6 (high)
+                ];
+                
+                melody.forEach((note) => {
                     const osc = ctx.createOscillator();
                     const g = ctx.createGain();
                     
-                    osc.frequency.value = freq;
+                    osc.frequency.value = note.freq;
                     osc.type = 'sine';
                     
-                    g.gain.setValueAtTime(0, ctx.currentTime + i * 0.3);
-                    g.gain.linearRampToValueAtTime(0.3, ctx.currentTime + i * 0.3 + 0.01);
-                    g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.3 + 0.25);
+                    // Louder volume
+                    g.gain.setValueAtTime(0, ctx.currentTime + note.time);
+                    g.gain.linearRampToValueAtTime(0.5, ctx.currentTime + note.time + 0.02);
+                    g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + note.time + 0.35);
                     
                     osc.connect(g);
                     g.connect(ctx.destination);
                     
-                    osc.start(ctx.currentTime + i * 0.3);
-                    osc.stop(ctx.currentTime + i * 0.3 + 0.25);
+                    osc.start(ctx.currentTime + note.time);
+                    osc.stop(ctx.currentTime + note.time + 0.35);
                 });
                 
                 // Close context after sounds finish
-                setTimeout(() => ctx.close(), 1200);
+                setTimeout(() => ctx.close(), 3000);
             } catch (err) {
                 console.log('Could not play sound:', err);
             }
@@ -694,27 +704,28 @@
             try {
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
                 
-                // Play 5 quick beeps (more urgent)
-                for (let i = 0; i < 5; i++) {
+                // Play 10 quick urgent beeps (more noticeable)
+                for (let i = 0; i < 10; i++) {
                     const osc = ctx.createOscillator();
                     const g = ctx.createGain();
                     
-                    osc.frequency.value = 800;
+                    osc.frequency.value = 880; // Higher pitch, more urgent
                     osc.type = 'square';
                     
-                    g.gain.setValueAtTime(0, ctx.currentTime + i * 0.2);
-                    g.gain.linearRampToValueAtTime(0.4, ctx.currentTime + i * 0.2 + 0.01);
-                    g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.2 + 0.15);
+                    // Louder volume
+                    g.gain.setValueAtTime(0, ctx.currentTime + i * 0.25);
+                    g.gain.linearRampToValueAtTime(0.6, ctx.currentTime + i * 0.25 + 0.01);
+                    g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.25 + 0.2);
                     
                     osc.connect(g);
                     g.connect(ctx.destination);
                     
-                    osc.start(ctx.currentTime + i * 0.2);
-                    osc.stop(ctx.currentTime + i * 0.2 + 0.15);
+                    osc.start(ctx.currentTime + i * 0.25);
+                    osc.stop(ctx.currentTime + i * 0.25 + 0.2);
                 }
                 
                 // Close context after sounds finish
-                setTimeout(() => ctx.close(), 1200);
+                setTimeout(() => ctx.close(), 3000);
             } catch (err) {
                 console.log('Could not play sound:', err);
             }
@@ -749,49 +760,59 @@
         async function testNotification() {
             console.log('Testing notification system...');
             
-            // Request notification permission if needed
+            // FORCE notification permission request
             if ('Notification' in window) {
+                console.log('Current permission:', Notification.permission);
+                
                 if (Notification.permission === 'default') {
+                    alert('⏰ You will now be asked for notification permission.\n\nPlease click ALLOW so you get alerted when your study session ends!');
                     const permission = await Notification.requestPermission();
+                    console.log('Permission result:', permission);
+                    
                     if (permission !== 'granted') {
-                        alert('❌ Notification permission denied. You will still hear sounds and feel vibrations, but no lock screen notifications will appear.');
-                        return;
+                        alert('❌ Notification permission denied.\n\nYou will still hear sounds and feel vibrations, but won\'t see lock screen notifications.\n\nTo enable later:\n• iPhone: Settings > Safari > Notifications\n• Android: Settings > Chrome > Notifications');
                     }
                 }
                 
                 if (Notification.permission === 'denied') {
-                    alert('❌ Notifications are blocked. To enable:\n\niPhone: Settings > Safari > Allow Notifications\nAndroid: Settings > Apps > Chrome > Notifications > Allow\n\nYou will still hear sounds and feel vibrations.');
-                    return;
+                    alert('⚠️ Notifications are BLOCKED in your browser.\n\nTo enable:\n\niPhone:\n1. Settings > Safari\n2. Scroll to "Notifications"\n3. Turn ON\n\nAndroid:\n1. Settings > Apps > Chrome\n2. Notifications > Allow\n\nYou will still get sounds and vibrations!');
                 }
+            } else {
+                alert('⚠️ Your browser doesn\'t support notifications.\n\nYou will still get sounds and vibrations when timer ends!');
             }
             
-            // Play sound
+            // Play longer sound
             console.log('Playing test sound...');
             playStudyCompleteSound();
             
-            // Vibrate
+            // Stronger vibration
             if (navigator.vibrate) {
                 console.log('Vibrating...');
-                navigator.vibrate([300, 100, 300, 100, 300]);
+                navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
+            } else {
+                console.log('Vibration not supported on this device');
             }
             
-            // Show notification
+            // Show notification if permission granted
             if ('Notification' in window && Notification.permission === 'granted') {
                 console.log('Showing notification...');
                 new Notification('🎉 Test Successful!', {
-                    body: 'You will receive this notification when your study session ends.',
+                    body: 'You will receive this notification + sound + vibration when your study session ends!',
                     icon: '📚',
-                    vibrate: [200, 100, 200]
+                    requireInteraction: true,
+                    vibrate: [500, 200, 500]
                 });
             }
             
-            // Show success message
+            // Show success message after sound finishes
             setTimeout(() => {
+                const hasVibration = navigator.vibrate ? '📳 Feel vibration? ' : '';
+                const hasNotification = (Notification.permission === 'granted') ? '🔔 See notification? ' : '';
+                
                 alert('✅ Test Complete!\n\n' +
-                      'Did you hear 3 beeps? ' + (navigator.vibrate ? '📳 Feel vibration? ' : '') +
-                      (Notification.permission === 'granted' ? '🔔 See notification?' : '') +
-                      '\n\nIf yes, your alarms are working! You\'ll get these when your timer ends.');
-            }, 1000);
+                      '🔊 Did you hear 6 beeps? ' + hasVibration + hasNotification +
+                      '\n\nIf YES: Your alarms are working!\n\nIf NO: Check phone is not on silent mode and volume is up.');
+            }, 3000);
         }
 
         function updateWakeLockStatus(message) {
@@ -977,9 +998,9 @@
             // Play break end sound
             playBreakEndSound();
             
-            // Vibrate (longer pattern for break end)
+            // Long urgent vibration pattern (3 seconds)
             if (navigator.vibrate) {
-                navigator.vibrate([200, 100, 200, 100, 200, 100, 200, 100, 200]);
+                navigator.vibrate([400, 100, 400, 100, 400, 100, 400, 100, 400, 100, 400]);
             }
             
             // Show notification
@@ -987,7 +1008,7 @@
                 new Notification('Break Time Over! ⏰', {
                     body: 'Time to get back to studying! 💪',
                     icon: '📚',
-                    vibrate: [200, 100, 200, 100, 200]
+                    vibrate: [400, 100, 400, 100, 400]
                 });
             }
             
@@ -995,7 +1016,7 @@
             setTimeout(() => {
                 alert('⏰ Break time is over! Time to get back to studying! 💪');
                 endBreakEarly();
-            }, 500);
+            }, 1000);
         }
 
         // End break early
@@ -1075,9 +1096,9 @@
             // Play completion sound
             playStudyCompleteSound();
             
-            // Vibrate
+            // Long vibration pattern (3 seconds total)
             if (navigator.vibrate) {
-                navigator.vibrate([300, 100, 300, 100, 300, 100, 300]);
+                navigator.vibrate([500, 200, 500, 200, 500, 200, 500, 200, 500]);
             }
             
             // Show notification
@@ -1088,7 +1109,7 @@
                 alert('🎉 Congratulations! You completed your study session!');
                 saveSession();
                 resetToSetup();
-            }, 500);
+            }, 1000);
         }
 
         // Save session
