@@ -358,15 +358,25 @@
         .weekly-summary {
             background: linear-gradient(135deg, #10b981 0%, #059669 100%);
             color: white;
-            padding: 25px;
+            padding: 20px;
             border-radius: 12px;
             margin-bottom: 20px;
+        }
+
+        .weekly-summary.compact {
+            padding: 15px;
+            margin-bottom: 0;
         }
 
         .weekly-summary h3 {
             margin-bottom: 15px;
             font-size: 20px;
             text-align: center;
+        }
+
+        .weekly-summary.compact h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
         }
 
         .weekly-progress {
@@ -463,6 +473,11 @@
                 </div>
             </div>
             <button class="btn-primary" onclick="startStudySession()" style="width: 100%;">Start Study Session</button>
+            
+            <!-- Weekly Progress Widget -->
+            <div id="weeklyProgressWidget" style="margin-top: 30px;"></div>
+            
+            <button class="btn-secondary" onclick="showRecords()" style="width: 100%; margin-top: 15px;">View All Records</button>
         </div>
 
         <!-- Timer Screen -->
@@ -563,6 +578,7 @@
         // Initialize
         function init() {
             loadRecords();
+            updateWeeklyProgressWidget(); // Show weekly progress on main screen
             requestWakeLock();
             
             // Request notification permission
@@ -1056,6 +1072,9 @@
             document.getElementById('breakTimerModal').classList.remove('active');
             document.getElementById('breakModal').classList.remove('active');
             document.getElementById('setupScreen').classList.add('active');
+            
+            // Refresh weekly progress
+            updateWeeklyProgressWidget();
         }
 
         // Show records
@@ -1068,7 +1087,14 @@
         // Show timer
         function showTimer() {
             document.getElementById('recordsScreen').classList.remove('active');
-            document.getElementById('timerScreen').classList.add('active');
+            
+            // Return to setup screen if not currently studying, otherwise timer screen
+            if (studyState.isRunning) {
+                document.getElementById('timerScreen').classList.add('active');
+            } else {
+                document.getElementById('setupScreen').classList.add('active');
+                updateWeeklyProgressWidget();
+            }
         }
 
         // Load and display records
@@ -1289,6 +1315,55 @@
                 percentComplete: Math.min(100, (totalStudySeconds / targetSeconds) * 100),
                 isOvertime: totalStudySeconds > targetSeconds
             };
+        }
+
+        // Update weekly progress widget on main screen
+        function updateWeeklyProgressWidget() {
+            const widget = document.getElementById('weeklyProgressWidget');
+            if (!widget) return;
+            
+            const weeklyStats = getWeeklyStats();
+            const progressPercent = Math.min(100, weeklyStats.percentComplete);
+            const progressWidth = weeklyStats.isOvertime ? 100 : progressPercent;
+            
+            widget.innerHTML = `
+                <div class="weekly-summary compact">
+                    <h3>📊 This Week's Progress</h3>
+                    
+                    <div class="weekly-progress">
+                        <div class="progress-bar-container">
+                            <div class="progress-bar ${weeklyStats.isOvertime ? 'overtime' : ''}" style="width: ${progressWidth}%;">
+                                ${Math.round(progressPercent)}%
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="weekly-target-info">
+                        <div style="font-size: 14px;">Target: 15 hours</div>
+                        <div class="target-remaining ${weeklyStats.isOvertime ? 'completed' : 'in-progress'}" style="font-size: 24px;">
+                            ${weeklyStats.isOvertime 
+                                ? '+' + formatDuration(Math.abs(weeklyStats.remainingSeconds)) + ' 🎉'
+                                : formatDuration(Math.max(0, weeklyStats.remainingSeconds)) + ' left'
+                            }
+                        </div>
+                        ${weeklyStats.isOvertime 
+                            ? '<div style="font-size: 12px; margin-top: 5px;">🌟 Target exceeded!</div>'
+                            : ''
+                        }
+                    </div>
+                    
+                    <div class="weekly-stats-grid" style="margin-top: 10px;">
+                        <div class="weekly-stat">
+                            <div class="weekly-stat-value" style="font-size: 18px;">${weeklyStats.totalSessions}</div>
+                            <div class="weekly-stat-label" style="font-size: 11px;">Sessions</div>
+                        </div>
+                        <div class="weekly-stat">
+                            <div class="weekly-stat-value" style="font-size: 18px;">${formatDuration(weeklyStats.totalStudySeconds)}</div>
+                            <div class="weekly-stat-label" style="font-size: 11px;">Studied</div>
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
         // Initialize app
