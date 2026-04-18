@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Timer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+
+        .setup-screen, .timer-screen, .records-screen {
+            display: none;
+        }
+
+        .setup-screen.active, .timer-screen.active, .records-screen.active {
+            display: block;
+        }
+
+        .input-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        input[type="number"], input[type="time"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="number"]:focus, input[type="time"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .timer-display {
+            font-size: 72px;
+            font-weight: bold;
+            text-align: center;
+            color: #667eea;
+            margin: 40px 0;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .status {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 18px;
+        }
+
+        .status.studying {
+            color: #10b981;
+            font-weight: 600;
+        }
+
+        .status.on-break {
+            color: #f59e0b;
+            font-weight: 600;
+        }
+
+        .status.stopped {
+            color: #ef4444;
+            font-weight: 600;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            flex: 1;
+            min-width: 120px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #d97706;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .session-info {
+            background: #f3f4f6;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .session-info-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .session-info-item:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .session-info-label {
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .session-info-value {
+            color: #111827;
+            font-weight: 600;
+        }
+
+        .records-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .record-item {
+            background: #f9fafb;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .record-date {
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 8px;
+        }
+
+        .record-details {
+            font-size: 14px;
+            color: #6b7280;
+            line-height: 1.6;
+        }
+
+        .no-records {
+            text-align: center;
+            color: #9ca3af;
+            padding: 40px;
+            font-style: italic;
+        }
+
+        .quick-select {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .quick-select button {
+            flex: 1;
+            min-width: 80px;
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .nav-tabs button {
+            flex: 1;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #333;
+        }
+
+        .break-options {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .break-options button {
+            padding: 15px;
+            font-size: 16px;
+        }
+
+        .break-timer-display {
+            font-size: 48px;
+            font-weight: bold;
+            text-align: center;
+            color: #f59e0b;
+            margin: 20px 0;
+        }
+
+        .daily-summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .daily-summary h3 {
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .summary-stat {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .summary-stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .summary-stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📚 Study Timer</h1>
+
+        <!-- Setup Screen -->
+        <div class="setup-screen active" id="setupScreen">
+            <div class="input-group">
+                <label for="studyDuration">How long do you want to study? (minutes)</label>
+                <input type="number" id="studyDuration" min="1" max="1440" value="25" placeholder="Enter minutes">
+                <div class="quick-select">
+                    <button class="btn-secondary" onclick="setQuickTime(25)">25 min</button>
+                    <button class="btn-secondary" onclick="setQuickTime(45)">45 min</button>
+                    <button class="btn-secondary" onclick="setQuickTime(60)">1 hour</button>
+                    <button class="btn-secondary" onclick="setQuickTime(120)">2 hours</button>
+                </div>
+            </div>
+            <button class="btn-primary" onclick="startStudySession()" style="width: 100%;">Start Study Session</button>
+        </div>
+
+        <!-- Timer Screen -->
+        <div class="timer-screen" id="timerScreen">
+            <div class="status" id="status">Ready to study</div>
+            <div class="timer-display" id="timerDisplay">00:00:00</div>
+            
+            <div class="session-info">
+                <div class="session-info-item">
+                    <span class="session-info-label">Started:</span>
+                    <span class="session-info-value" id="startTime">--:--</span>
+                </div>
+                <div class="session-info-item">
+                    <span class="session-info-label">Target Duration:</span>
+                    <span class="session-info-value" id="targetDuration">-- min</span>
+                </div>
+                <div class="session-info-item">
+                    <span class="session-info-label">Time Studied:</span>
+                    <span class="session-info-value" id="timeStudied">0 min</span>
+                </div>
+                <div class="session-info-item">
+                    <span class="session-info-label">Break Time:</span>
+                    <span class="session-info-value" id="breakTime">0 min</span>
+                </div>
+            </div>
+
+            <div class="buttons">
+                <button class="btn-warning" id="breakBtn" onclick="toggleBreak()" disabled>Take Break</button>
+                <button class="btn-danger" id="stopBtn" onclick="stopSession()" disabled>Stop & Save</button>
+            </div>
+
+            <button class="btn-secondary" onclick="showRecords()" style="width: 100%; margin-top: 15px;">View Records</button>
+        </div>
+
+        <!-- Records Screen -->
+        <div class="records-screen" id="recordsScreen">
+            <div class="nav-tabs">
+                <button class="btn-primary" onclick="showTimer()">← Back to Timer</button>
+                <button class="btn-secondary" onclick="clearAllRecords()">Clear All</button>
+            </div>
+            <div class="records-list" id="recordsList">
+                <div class="no-records">No study records yet. Start your first session!</div>
+            </div>
+        </div>
+
+        <!-- Break Duration Modal -->
+        <div class="modal" id="breakModal">
+            <div class="modal-content">
+                <div class="modal-title">☕ How long is your break?</div>
+                <div class="break-options">
+                    <button class="btn-secondary" onclick="startBreak(5)">5 min</button>
+                    <button class="btn-secondary" onclick="startBreak(10)">10 min</button>
+                    <button class="btn-secondary" onclick="startBreak(15)">15 min</button>
+                    <button class="btn-secondary" onclick="startBreak(20)">20 min</button>
+                    <button class="btn-secondary" onclick="startBreak(25)">25 min</button>
+                    <button class="btn-secondary" onclick="startBreak(30)">30 min</button>
+                </div>
+                <button class="btn-danger" onclick="closeBreakModal()" style="width: 100%;">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Break Timer Modal -->
+        <div class="modal" id="breakTimerModal">
+            <div class="modal-content">
+                <div class="modal-title">☕ Break Time</div>
+                <div class="break-timer-display" id="breakTimerDisplay">05:00</div>
+                <div style="text-align: center; color: #666; margin-bottom: 20px;">
+                    Enjoy your break! Timer will notify you when it's done.
+                </div>
+                <button class="btn-success" onclick="endBreakEarly()" style="width: 100%; margin-bottom: 10px;">End Break Early</button>
+                <button class="btn-warning" onclick="extendBreak()" style="width: 100%;">+5 More Minutes</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State management
+        let studyState = {
+            isRunning: false,
+            onBreak: false,
+            startTime: null,
+            targetMinutes: 0,
+            remainingSeconds: 0,
+            totalStudySeconds: 0,
+            totalBreakSeconds: 0,
+            breakStartTime: null,
+            breakDurationSeconds: 0,
+            breakRemainingSeconds: 0,
+            breaks: []
+        };
+
+        let timerInterval = null;
+        let breakInterval = null;
+
+        // Initialize
+        function init() {
+            loadRecords();
+        }
+
+        // Quick time selection
+        function setQuickTime(minutes) {
+            document.getElementById('studyDuration').value = minutes;
+        }
+
+        // Start study session
+        function startStudySession() {
+            const duration = parseInt(document.getElementById('studyDuration').value);
+            
+            if (!duration || duration < 1) {
+                alert('Please enter a valid study duration (at least 1 minute)');
+                return;
+            }
+
+            studyState = {
+                isRunning: true,
+                onBreak: false,
+                startTime: new Date(),
+                targetMinutes: duration,
+                remainingSeconds: duration * 60,
+                totalStudySeconds: 0,
+                totalBreakSeconds: 0,
+                breakStartTime: null,
+                breaks: []
+            };
+
+            document.getElementById('setupScreen').classList.remove('active');
+            document.getElementById('timerScreen').classList.add('active');
+
+            updateSessionInfo();
+            startTimer();
+        }
+
+        // Timer logic
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            
+            // Enable buttons
+            document.getElementById('breakBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = false;
+            
+            timerInterval = setInterval(() => {
+                if (studyState.isRunning && !studyState.onBreak) {
+                    studyState.remainingSeconds--;
+                    studyState.totalStudySeconds++;
+
+                    if (studyState.remainingSeconds <= 0) {
+                        completeSession();
+                        return;
+                    }
+                }
+
+                updateDisplay();
+            }, 1000);
+
+            updateDisplay();
+        }
+
+        // Update timer display
+        function updateDisplay() {
+            const hours = Math.floor(studyState.remainingSeconds / 3600);
+            const minutes = Math.floor((studyState.remainingSeconds % 3600) / 60);
+            const seconds = studyState.remainingSeconds % 60;
+
+            document.getElementById('timerDisplay').textContent = 
+                `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+            // Update status
+            const statusEl = document.getElementById('status');
+            if (studyState.onBreak) {
+                statusEl.textContent = '☕ On Break';
+                statusEl.className = 'status on-break';
+            } else if (studyState.isRunning) {
+                statusEl.textContent = '📖 Studying...';
+                statusEl.className = 'status studying';
+            } else {
+                statusEl.textContent = '⏸️ Stopped';
+                statusEl.className = 'status stopped';
+            }
+
+            updateSessionInfo();
+        }
+
+        // Update session information
+        function updateSessionInfo() {
+            document.getElementById('startTime').textContent = 
+                studyState.startTime ? studyState.startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+            
+            document.getElementById('targetDuration').textContent = `${studyState.targetMinutes} min`;
+            
+            document.getElementById('timeStudied').textContent = 
+                formatDuration(studyState.totalStudySeconds);
+            
+            document.getElementById('breakTime').textContent = 
+                formatDuration(studyState.totalBreakSeconds);
+        }
+
+        // Toggle break - now opens modal to select duration
+        function toggleBreak() {
+            if (studyState.onBreak) {
+                // Already on break, this shouldn't happen as button is hidden
+                return;
+            }
+            
+            // Show break duration selection modal
+            document.getElementById('breakModal').classList.add('active');
+        }
+
+        // Close break modal
+        function closeBreakModal() {
+            document.getElementById('breakModal').classList.remove('active');
+        }
+
+        // Start break with selected duration
+        function startBreak(minutes) {
+            closeBreakModal();
+            
+            studyState.onBreak = true;
+            studyState.breakStartTime = new Date();
+            studyState.breakDurationSeconds = minutes * 60;
+            studyState.breakRemainingSeconds = minutes * 60;
+            
+            // Hide study timer controls, show break timer modal
+            document.getElementById('breakTimerModal').classList.add('active');
+            
+            // Start break countdown
+            if (breakInterval) clearInterval(breakInterval);
+            breakInterval = setInterval(() => {
+                studyState.breakRemainingSeconds--;
+                studyState.totalBreakSeconds++;
+                
+                const mins = Math.floor(studyState.breakRemainingSeconds / 60);
+                const secs = studyState.breakRemainingSeconds % 60;
+                document.getElementById('breakTimerDisplay').textContent = 
+                    `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+                
+                updateDisplay();
+                
+                if (studyState.breakRemainingSeconds <= 0) {
+                    breakComplete();
+                }
+            }, 1000);
+            
+            updateDisplay();
+        }
+
+        // Break timer completed
+        function breakComplete() {
+            clearInterval(breakInterval);
+            
+            // Vibrate if supported
+            if (navigator.vibrate) {
+                navigator.vibrate([200, 100, 200, 100, 200]);
+            }
+            
+            alert('⏰ Break time is over! Time to get back to studying! 💪');
+            endBreakEarly();
+        }
+
+        // End break early (resume studying)
+        function endBreakEarly() {
+            clearInterval(breakInterval);
+            
+            const breakDuration = Math.floor((new Date() - studyState.breakStartTime) / 1000);
+            studyState.breaks.push({
+                startTime: studyState.breakStartTime,
+                endTime: new Date(),
+                duration: breakDuration,
+                plannedDuration: studyState.breakDurationSeconds
+            });
+            
+            studyState.onBreak = false;
+            studyState.breakStartTime = null;
+            studyState.breakDurationSeconds = 0;
+            studyState.breakRemainingSeconds = 0;
+            
+            document.getElementById('breakTimerModal').classList.remove('active');
+            updateDisplay();
+        }
+
+        // Extend break by 5 minutes
+        function extendBreak() {
+            studyState.breakRemainingSeconds += 300; // Add 5 minutes
+            studyState.breakDurationSeconds += 300;
+        }
+
+        // Stop session
+        function stopSession() {
+            // If on break, close the break first
+            if (studyState.onBreak) {
+                clearInterval(breakInterval);
+                const breakDuration = Math.floor((new Date() - studyState.breakStartTime) / 1000);
+                studyState.breaks.push({
+                    startTime: studyState.breakStartTime,
+                    endTime: new Date(),
+                    duration: breakDuration,
+                    plannedDuration: studyState.breakDurationSeconds
+                });
+                studyState.onBreak = false;
+                document.getElementById('breakTimerModal').classList.remove('active');
+            }
+
+            studyState.isRunning = false;
+            clearInterval(timerInterval);
+            saveSession();
+            
+            // Show confirmation message
+            alert('✅ Session saved! You studied for ' + formatDuration(studyState.totalStudySeconds));
+            
+            resetToSetup();
+        }
+
+        // Complete session (when timer reaches 0)
+        function completeSession() {
+            clearInterval(timerInterval);
+            studyState.isRunning = false;
+            
+            alert('🎉 Congratulations! You completed your study session!');
+            saveSession();
+            resetToSetup();
+        }
+
+        // Save session to localStorage
+        function saveSession() {
+            const session = {
+                date: new Date().toISOString(),
+                startTime: studyState.startTime.toISOString(),
+                endTime: new Date().toISOString(),
+                targetMinutes: studyState.targetMinutes,
+                studySeconds: studyState.totalStudySeconds,
+                breakSeconds: studyState.totalBreakSeconds,
+                breaks: studyState.breaks,
+                completed: studyState.remainingSeconds <= 0
+            };
+
+            let records = JSON.parse(localStorage.getItem('studyRecords') || '[]');
+            records.unshift(session);
+            localStorage.setItem('studyRecords', JSON.stringify(records));
+        }
+
+        // Reset to setup screen
+        function resetToSetup() {
+            clearInterval(timerInterval);
+            clearInterval(breakInterval);
+            document.getElementById('timerScreen').classList.remove('active');
+            document.getElementById('breakTimerModal').classList.remove('active');
+            document.getElementById('breakModal').classList.remove('active');
+            document.getElementById('setupScreen').classList.add('active');
+        }
+
+        // Show records
+        function showRecords() {
+            document.getElementById('timerScreen').classList.remove('active');
+            document.getElementById('recordsScreen').classList.add('active');
+            loadRecords();
+        }
+
+        // Show timer
+        function showTimer() {
+            document.getElementById('recordsScreen').classList.remove('active');
+            document.getElementById('timerScreen').classList.add('active');
+        }
+
+        // Load and display records
+        function loadRecords() {
+            const records = JSON.parse(localStorage.getItem('studyRecords') || '[]');
+            const recordsList = document.getElementById('recordsList');
+
+            if (records.length === 0) {
+                recordsList.innerHTML = '<div class="no-records">No study records yet. Start your first session!</div>';
+                return;
+            }
+
+            // Group by date
+            const groupedByDate = records.reduce((acc, record) => {
+                const date = new Date(record.date).toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                });
+                if (!acc[date]) acc[date] = [];
+                acc[date].push(record);
+                return acc;
+            }, {});
+
+            let html = '';
+            for (const [date, sessions] of Object.entries(groupedByDate)) {
+                const totalStudySeconds = sessions.reduce((sum, s) => sum + s.studySeconds, 0);
+                const totalBreakSeconds = sessions.reduce((sum, s) => sum + s.breakSeconds, 0);
+                const totalSessions = sessions.length;
+                const completedSessions = sessions.filter(s => s.completed).length;
+
+                // Daily Summary Card
+                html += `
+                    <div class="daily-summary">
+                        <h3>📅 ${date}</h3>
+                        <div class="summary-stats">
+                            <div class="summary-stat">
+                                <div class="summary-stat-value">${totalSessions}</div>
+                                <div class="summary-stat-label">Total Sessions</div>
+                            </div>
+                            <div class="summary-stat">
+                                <div class="summary-stat-value">${completedSessions}</div>
+                                <div class="summary-stat-label">Completed</div>
+                            </div>
+                            <div class="summary-stat">
+                                <div class="summary-stat-value">${formatDuration(totalStudySeconds)}</div>
+                                <div class="summary-stat-label">Study Time</div>
+                            </div>
+                            <div class="summary-stat">
+                                <div class="summary-stat-value">${formatDuration(totalBreakSeconds)}</div>
+                                <div class="summary-stat-label">Break Time</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Individual Sessions
+                html += `<div class="record-item">`;
+                html += sessions.map((s, i) => `
+                    <div style="${i > 0 ? 'margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;' : ''}">
+                        <strong>Session ${i + 1}:</strong> ${s.completed ? '✅ Completed' : '⏸️ Stopped early'}<br>
+                        <strong>Time:</strong> ${new Date(s.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} - 
+                        ${new Date(s.endTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}<br>
+                        <strong>Studied:</strong> ${formatDuration(s.studySeconds)} | 
+                        <strong>Breaks:</strong> ${formatDuration(s.breakSeconds)} (${s.breaks.length} break${s.breaks.length !== 1 ? 's' : ''})
+                        ${s.breaks.length > 0 ? '<br><strong>Break Details:</strong><br>' + s.breaks.map((b, bi) => 
+                            `&nbsp;&nbsp;• Break ${bi + 1}: ${formatDuration(b.duration)}${b.plannedDuration ? ' (planned: ' + formatDuration(b.plannedDuration) + ')' : ''}`
+                        ).join('<br>') : ''}
+                    </div>
+                `).join('');
+                html += `</div>`;
+            }
+
+            recordsList.innerHTML = html;
+        }
+
+        // Clear all records
+        function clearAllRecords() {
+            if (confirm('Are you sure you want to delete all study records? This cannot be undone.')) {
+                localStorage.removeItem('studyRecords');
+                loadRecords();
+            }
+        }
+
+        // Format duration in seconds to readable format
+        function formatDuration(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            if (hours > 0) {
+                return `${hours}h ${minutes}m`;
+            }
+            return `${minutes}m`;
+        }
+
+        // Initialize app
+        init();
+    </script>
+</body>
+</html>
