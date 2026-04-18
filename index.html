@@ -466,11 +466,19 @@
 
         let timerInterval = null;
         let wakeLock = null;
+        let audioContext = null;
+        let oscillator = null;
+        let gainNode = null;
 
         // Initialize
         function init() {
             loadRecords();
             requestWakeLock();
+            
+            // Request notification permission
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
             
             // Re-request wake lock when page becomes visible
             document.addEventListener('visibilitychange', () => {
@@ -495,6 +503,136 @@
                 }
             } else {
                 updateWakeLockStatus('⚠️ Timer works even with screen off');
+            }
+        }
+
+        // Start silent audio to prevent browser from pausing timer
+        function startSilentAudio() {
+            try {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    oscillator = audioContext.createOscillator();
+                    gainNode = audioContext.createGain();
+                    
+                    // Set volume to almost zero (silent but running)
+                    gainNode.gain.value = 0.001;
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    oscillator.start(0);
+                    
+                    console.log('Silent audio started - timer will run with screen off');
+                }
+            } catch (err) {
+                console.log('Could not start silent audio:', err);
+            }
+        }
+
+        // Stop silent audio
+        function stopSilentAudio() {
+            try {
+                if (oscillator) {
+                    oscillator.stop();
+                    oscillator.disconnect();
+                    oscillator = null;
+                }
+                if (gainNode) {
+                    gainNode.disconnect();
+                    gainNode = null;
+                }
+                if (audioContext) {
+                    audioContext.close();
+                    audioContext = null;
+                }
+            } catch (err) {
+                console.log('Error stopping audio:', err);
+            }
+        }
+
+        // Play alarm sound for study completion
+        function playStudyCompleteSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Play 3 ascending beeps
+                [440, 554, 659].forEach((freq, i) => {
+                    const osc = ctx.createOscillator();
+                    const g = ctx.createGain();
+                    
+                    osc.frequency.value = freq;
+                    osc.type = 'sine';
+                    
+                    g.gain.setValueAtTime(0, ctx.currentTime + i * 0.3);
+                    g.gain.linearRampToValueAtTime(0.3, ctx.currentTime + i * 0.3 + 0.01);
+                    g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.3 + 0.25);
+                    
+                    osc.connect(g);
+                    g.connect(ctx.destination);
+                    
+                    osc.start(ctx.currentTime + i * 0.3);
+                    osc.stop(ctx.currentTime + i * 0.3 + 0.25);
+                });
+                
+                // Close context after sounds finish
+                setTimeout(() => ctx.close(), 1200);
+            } catch (err) {
+                console.log('Could not play sound:', err);
+            }
+        }
+
+        // Play alarm sound for break end
+        function playBreakEndSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Play 5 quick beeps (more urgent)
+                for (let i = 0; i < 5; i++) {
+                    const osc = ctx.createOscillator();
+                    const g = ctx.createGain();
+                    
+                    osc.frequency.value = 800;
+                    osc.type = 'square';
+                    
+                    g.gain.setValueAtTime(0, ctx.currentTime + i * 0.2);
+                    g.gain.linearRampToValueAtTime(0.4, ctx.currentTime + i * 0.2 + 0.01);
+                    g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.2 + 0.15);
+                    
+                    osc.connect(g);
+                    g.connect(ctx.destination);
+                    
+                    osc.start(ctx.currentTime + i * 0.2);
+                    osc.stop(ctx.currentTime + i * 0.2 + 0.15);
+                }
+                
+                // Close context after sounds finish
+                setTimeout(() => ctx.close(), 1200);
+            } catch (err) {
+                console.log('Could not play sound:', err);
+            }
+        }
+
+        // Wake up screen by requesting notification permission (if not already granted)
+        async function wakeUpScreen() {
+            try {
+                // Try to show a notification (this often wakes the screen)
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification('Study Timer', {
+                        body: 'Time to check your timer!',
+                        icon: '📚',
+                        vibrate: [200, 100, 200, 100, 200, 100, 200]
+                    });
+                } else if ('Notification' in window && Notification.permission !== 'denied') {
+                    // Request permission
+                    const permission = await Notification.requestPermission();
+                    if (permission === 'granted') {
+                        new Notification('Study Timer', {
+                            body: 'Notifications enabled! You\'ll be notified when timer ends.',
+                            icon: '📚'
+                        });
+                    }
+                }
+            } catch (err) {
+                console.log('Could not show notification:', err);
             }
         }
 
@@ -537,6 +675,7 @@
             document.getElementById('timerScreen').classList.add('active');
 
             requestWakeLock();
+            startSilentAudio(); // Keep timer running when screen is off
             updateSessionInfo();
             startTimer();
         }
@@ -677,12 +816,28 @@
 
         // Break timer completed
         function breakComplete() {
+            // Play break end sound
+            playBreakEndSound();
+            
+            // Vibrate (longer pattern for break end)
             if (navigator.vibrate) {
-                navigator.vibrate([200, 100, 200, 100, 200]);
+                navigator.vibrate([200, 100, 200, 100, 200, 100, 200, 100, 200]);
             }
             
-            alert('⏰ Break time is over! Time to get back to studying! 💪');
-            endBreakEarly();
+            // Show notification
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('Break Time Over! ⏰', {
+                    body: 'Time to get back to studying! 💪',
+                    icon: '📚',
+                    vibrate: [200, 100, 200, 100, 200]
+                });
+            }
+            
+            // Show alert after brief delay
+            setTimeout(() => {
+                alert('⏰ Break time is over! Time to get back to studying! 💪');
+                endBreakEarly();
+            }, 500);
         }
 
         // End break early
@@ -736,6 +891,8 @@
                 wakeLock = null;
             }
             
+            stopSilentAudio(); // Stop the silent audio
+            
             saveSession();
             
             const now = Date.now();
@@ -755,9 +912,25 @@
                 wakeLock = null;
             }
             
-            alert('🎉 Congratulations! You completed your study session!');
-            saveSession();
-            resetToSetup();
+            stopSilentAudio();
+            
+            // Play completion sound
+            playStudyCompleteSound();
+            
+            // Vibrate
+            if (navigator.vibrate) {
+                navigator.vibrate([300, 100, 300, 100, 300, 100, 300]);
+            }
+            
+            // Show notification
+            wakeUpScreen();
+            
+            // Show alert after a brief delay so sound plays first
+            setTimeout(() => {
+                alert('🎉 Congratulations! You completed your study session!');
+                saveSession();
+                resetToSetup();
+            }, 500);
         }
 
         // Save session
